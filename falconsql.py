@@ -4,8 +4,9 @@ import sys
 import argparse
 from itertools import cycle
 import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from concurrent.futures import ThreadPoolExecutor
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class SQLInjectionChecker:
@@ -86,6 +87,16 @@ class SQLInjectionChecker:
             print(f"Error while sending request to {url}: {e}")
 
         return False
+
+
+def check_url(url):
+    if checker.check_sql_injection(url):
+        print(f"{url} might be SQL injectable.")
+        return url
+    else:
+        print(f"{url} seems not to be SQL injectable.")
+        return None
+
 
 def main(args):
     print("Made With Love By Th3 Gr34T F4LC0N")
