@@ -1,20 +1,21 @@
-# Falcon-Inj-Checker
-Sql URL injection Checker
----------------------------------
-
---urls: The path to the file containing the list of URLs you want to check for SQL injection vulnerabilities. The default is "urls.txt".
-
---proxies: A comma-separated list of proxies to use for sending requests. 
-The default is "http://127.0.0.1:24000,http://127.0.0.1:24001,http://127.0.0.1:24002".
-
---timeout: The timeout for each request in seconds. The default is 10 seconds.
-
---output: The path to the output file where SQL injectable URLs will be saved. The default is "result.txt".
-
-
-
-To run the script with these arguments, you can use a command like this:
-
-python Falcon-Inj-Checker.py --urls my_urls.txt --proxies http://proxy1:port,http://proxy2:port --timeout 15 --output injectable_urls.txt
-
-This command will check the URLs in the "my_urls.txt" file using the specified proxies with a 15-second timeout for each request. The script will save any potentially SQL-injectable URLs in the "injectable_urls.txt" file.
+This script is a Python-based SQL injection checker that scans a list of URLs to identify possible SQL injection vulnerabilities. The script reads URLs from a file and checks them using different payloads and proxies to bypass security measures. If an SQL injection vulnerability is found, the script reports the URL as potentially SQL injectable.
+Here's a summary of the script's main features:
+    1. It reads a list of URLs from a file provided as a command-line argument.
+    2. It uses a list of proxies from a file to rotate through during the checking process.
+    3. It reads payloads and SQL error patterns from separate files.
+    4. It uses multithreading to perform concurrent URL checks.
+    5. It adds a random delay between requests to avoid being blocked.
+    6. It saves the potentially SQL injectable URLs to an output file.
+The script uses several command-line arguments to customize its behavior:
+    • --urls: Path to the file containing URLs to check (default: urls.txt)
+    • --proxies: Path to the file containing proxies to use (default: proxies.txt)
+    • --timeout: Request timeout in seconds (default: 10)
+    • --output: Output file for saving SQL injectable URLs (default: result.txt)
+    • --threads: Number of concurrent threads to use (default: 50)
+    • --min_delay: Minimum delay between requests in seconds (default: 1.0)
+    • --max_delay: Maximum delay between requests in seconds (default: 3.0)
+To run the script, you need to have Python 3 installed and the following dependencies:
+    • requests
+    • colorama
+    • tqdm
+Make sure to create the required input files (URLs, proxies, payloads, and SQL patterns) before running the script. To run the script, save it to a file (e.g., sql_injection_checker.py) and execute it from the command line:
