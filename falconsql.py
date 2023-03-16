@@ -25,12 +25,21 @@ class SQLInjectionChecker:
         self.proxies = proxy_list
         self.timeout = timeout
         self.proxy_cycle = cycle(proxy_list)
-        
-        with open(payloads_file, "r") as f:
-            self.payloads = [line.strip() for line in f.readlines()]
 
-        with open(sql_patterns_file, "r") as f:
-            self.sql_errors = [line.strip() for line in f.readlines()]
+        try:
+            with open(payloads_file, "r") as f:
+                self.payloads = [line.strip() for line in f.readlines()]
+        except IOError as e:
+            print(f"Error reading payloads file: {e}")
+            sys.exit(1)
+
+        try:
+            with open(sql_patterns_file, "r") as f:
+                self.sql_errors = [line.strip() for line in f.readlines()]
+        except IOError as e:
+            print(f"Error reading SQL patterns file: {e}")
+            sys.exit(1)
+
 
     def get_next_proxy(self):
         return next(self.proxy_cycle)
@@ -55,8 +64,22 @@ class SQLInjectionChecker:
                         return True
         except requests.exceptions.RequestException as e:
             print(f"Error while sending request to {url}: {e}")
+        except ProxyError as e:
+            print(f"Error with proxy {proxy} for URL {url}: {e}")
+        except requests.exceptions.Timeout as e:
+            print(f"Request timed out for URL {url} with proxy {proxy}: {e}")
+        except requests.exceptions.TooManyRedirects as e:
+            print(f"Too many redirects for URL {url} with proxy {proxy}: {e}")
+        except requests.exceptions.SSLError as e:
+            print(f"SSL/TLS error for URL {url} with proxy {proxy}: {e}")
+        except requests.exceptions.ConnectionError as e:
+            print(f"Connection error for URL {url} with proxy {proxy}: {e}")
+        except Exception as e:
+            print(f"Unexpected error for URL {url} with proxy {proxy}: {e}")
 
         return False
+
+
 
 
 def check_url(url, checker):
@@ -71,19 +94,44 @@ def check_url(url, checker):
 def read_proxies(proxy_file):
     if not os.path.isfile(proxy_file):
         raise FileNotFoundError(f"{proxy_file} not found.")
-    with open(proxy_file, "r") as f:
-        return [line.strip() for line in f.readlines() if line.strip()]
+    try:
+        with open(proxy_file, "r") as f:
+            return [line.strip() for line in f.readlines() if line.strip()]
+    except IOError as e:
+        print(f"Error reading proxies file: {e}")
+        sys.exit(1)
+
+def verify_files(files):
+    for file in files:
+        if not os.path.isfile(file):
+            raise FileNotFoundError(f"{file} not found.")
+        try:
+            with open(file, "r") as f:
+                content = f.read().strip()
+                if not content:
+                    raise ValueError(f"{file} is empty. Please make sure it contains valid data.")
+        except IOError as e:
+            print(f"Error reading {file}: {e}")
+            sys.exit(1)
+
 
 def main(args):
     print("Made With Love By Th3 Gr34T F4LC0N")
     input("Press Enter to start checking URLs...")
 
+    # Verify payloads and SQL error patterns files
+    verify_files(["payloads.txt", "sql-patterns.txt"])
+
     proxy_list = read_proxies(args.proxies)
 
     checker = SQLInjectionChecker(proxy_list, args.timeout)
 
-    with open(args.urls, "r", encoding="utf-8") as f:
-        urls = f.readlines()
+    try:
+        with open(args.urls, "r", encoding="utf-8") as f:
+            urls = f.readlines()
+    except IOError as e:
+        print(f"Error reading URLs file: {e}")
+        sys.exit(1)
 
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
         futures = [executor.submit(lambda url: check_url(url.strip(), checker), url) for url in urls]
@@ -91,16 +139,32 @@ def main(args):
         # Use tqdm to create a progress bar
         with tqdm(total=len(futures)) as pbar:
             for future in as_completed(futures):
-                # Update the progress bar after each completed task
-                if future.result() is not None:
-                    pbar.update(1)
+                try:
+                    # Check for exceptions that occurred within the check_url function
+                    if future.exception() is not None:
+                        print(f"Error processing URL: {future.exception()}")
+                    elif future.result() is not None:
+                        pbar.update(1)
+                except Exception as e:
+                    print(f"Error handling future: {e}")
+
+    # Use tqdm to create a progress bar
+    with tqdm(total=len(futures)) as pbar:
+        for future in as_completed(futures):
+            # Update the progress bar after each completed task
+            if future.result() is not None:
+                pbar.update(1)
 
     # Get the results from the futures
     results = [future.result() for future in futures if future.result() is not None]
 
-    with open(args.output, "w") as f:
-        for result in results:
-            f.write(f"{result}\n")
+    try:
+        with open(args.output, "w") as f:
+            for result in results:
+                f.write(f"{result}\n")
+    except IOError as e:
+        print(f"Error writing to the output file: {e}")
+        sys.exit(1)
 
     # Add a report at the end with the number of working URLs in green color
     print(Fore.GREEN + f"Number of Working URLs: {len(results)}" + Fore.RESET)
