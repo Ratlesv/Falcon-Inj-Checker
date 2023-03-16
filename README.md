@@ -3,8 +3,12 @@ Sql URL injection Checker
 ---------------------------------
 
 --urls: The path to the file containing the list of URLs you want to check for SQL injection vulnerabilities. The default is "urls.txt".
---proxies: A comma-separated list of proxies to use for sending requests. The default is "http://127.0.0.1:24000,http://127.0.0.1:24001,http://127.0.0.1:24002".
+
+--proxies: A comma-separated list of proxies to use for sending requests. 
+The default is "http://127.0.0.1:24000,http://127.0.0.1:24001,http://127.0.0.1:24002".
+
 --timeout: The timeout for each request in seconds. The default is 10 seconds.
+
 --output: The path to the output file where SQL injectable URLs will be saved. The default is "result.txt".
 
 
