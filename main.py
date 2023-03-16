@@ -1,146 +1,155 @@
-#!/usr/bin/env python3
-import requests
-import re
-import sys
-import argparse
 import os
-from itertools import cycle
-import urllib3
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+import sys
 import random
+import time
+import re
+import argparse
+import curses
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests.exceptions import ProxyError
+import requests
+import urllib3
 from colorama import init, Fore
 from tqdm import tqdm
-from requests.exceptions import ProxyError
-
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 init(autoreset=False)  # Initialize colorama without auto-reset
 
 
-class SQLInjectionChecker:
+def print_banner(stdscr):
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(0, 0, "Made with love by ")
+    stdscr.attroff(curses.color_pair(1))
+    
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(0, 18, "The Great Falcon")
+    stdscr.attroff(curses.color_pair(2))
+    
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(1, 0, "**********************************")
+    stdscr.attroff(curses.color_pair(2))
+    
+    stdscr.refresh()
 
+def update_statistics(stdscr, current_url, processed_urls, total_urls, injectable_count, start_time):
+    elapsed_time = time.time() - start_time
+    elapsed_minutes, elapsed_seconds = divmod(elapsed_time, 60)
+    
+    stdscr.addstr(4, 0, f"Current URL: {current_url}")
+    stdscr.addstr(5, 0, f"Processed URLs: {processed_urls}/{total_urls}")
+    stdscr.addstr(6, 0, f"Injectable URLs Found: {injectable_count}")
+    stdscr.addstr(7, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
+    stdscr.refresh()
+
+def update_stats_periodically(stdscr, checker, delay=2):
+    while True:
+        time.sleep(delay)
+        update_statistics(stdscr, checker.current_url, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
+
+
+
+def handle_request_errors(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except requests.exceptions.RequestException as e:
+            print(f"Error while sending request: {e}")
+        except ProxyError as e:
+            print(f"Error with proxy: {e}")
+        except requests.exceptions.Timeout as e:
+            print(f"Request timed out: {e}")
+        except requests.exceptions.TooManyRedirects as e:
+            print(f"Too many redirects: {e}")
+        except requests.exceptions.SSLError as e:
+            print(f"SSL/TLS error: {e}")
+        except requests.exceptions.ConnectionError as e:
+            print(f"Connection error: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        return None
+
+    return wrapper
+
+
+class SQLInjectionChecker:
     def __init__(self, proxy_list, timeout=10, payloads_file="payloads.txt", sql_patterns_file="sql-patterns.txt"):
         self.proxies = proxy_list
         self.timeout = timeout
-        self.proxy_cycle = cycle(proxy_list)
+        self.payloads = self._read_file(payloads_file)
+        self.sql_errors = self._read_file(sql_patterns_file)
+        self.current_url = ""
+        self.processed_urls = 0
+        self.total_urls = 0
+        self.injectable_count = 0
+        self.start_time = time.time()
 
+    @staticmethod
+    def _read_file(file_path):
         try:
-            with open(payloads_file, "r") as f:
-                self.payloads = [line.strip() for line in f.readlines()]
+            with open(file_path, "r", encoding="utf-8") as f:
+                return [line.strip() for line in f.readlines()]
         except IOError as e:
-            print(f"Error reading payloads file: {e}")
+            print(f"Error reading file: {e}")
             sys.exit(1)
 
-        try:
-            with open(sql_patterns_file, "r") as f:
-                self.sql_errors = [line.strip() for line in f.readlines()]
-        except IOError as e:
-            print(f"Error reading SQL patterns file: {e}")
-            sys.exit(1)
+    @handle_request_errors
+    def request_injected_url(self, injected_url, proxy, headers):
+        return requests.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
 
+    def get_random_proxy(self):
+        return random.choice(self.proxies)
 
-    def get_next_proxy(self):
-        return next(self.proxy_cycle)
-
-    def check_sql_injection(self, url):
+    def check_sql_injection(self, url, retries=3):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
         }
 
-        try:
+        for _ in range(retries):
             for payload in self.payloads:
                 injected_url = url.replace("[t]", payload)
-                proxy = self.get_next_proxy()
+                proxy = self.get_random_proxy()
 
-                # Print the proxy being used for the current request
                 print(f"Using proxy: {proxy} for URL: {injected_url}")
 
-                response = requests.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
+                response = self.request_injected_url(injected_url, proxy, headers)
 
-                for error in self.sql_errors:
-                    if re.search(error, response.text, re.IGNORECASE):
-                        return True
-        except requests.exceptions.RequestException as e:
-            print(f"Error while sending request to {url}: {e}")
-        except ProxyError as e:
-            print(f"Error with proxy {proxy} for URL {url}: {e}")
-        except requests.exceptions.Timeout as e:
-            print(f"Request timed out for URL {url} with proxy {proxy}: {e}")
-        except requests.exceptions.TooManyRedirects as e:
-            print(f"Too many redirects for URL {url} with proxy {proxy}: {e}")
-        except requests.exceptions.SSLError as e:
-            print(f"SSL/TLS error for URL {url} with proxy {proxy}: {e}")
-        except requests.exceptions.ConnectionError as e:
-            print(f"Connection error for URL {url} with proxy {proxy}: {e}")
-        except Exception as e:
-            print(f"Unexpected error for URL {url} with proxy {proxy}: {e}")
+                if response is not None:
+                    for error in self.sql_errors:
+                        if re.search(error, response.text, re.IGNORECASE):
+                            return True
 
         return False
 
 
+def check_url(url, checker, stdscr, min_delay, max_delay):
+    time.sleep(random.uniform(min_delay, max_delay))
+    is_injectable = checker.check_sql_injection(url)
+    checker.current_url = url
+    checker.processed_urls += 1
+    if is_injectable:
+        checker.injectable_count += 1
 
+    update_statistics(stdscr, url, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
+    return url if is_injectable else None
 
-def check_url(url, checker):
-    time.sleep(random.uniform(args.min_delay, args.max_delay))  # Add a random delay between requests
-    if checker.check_sql_injection(url):
-        tqdm.write(f"{url} might be SQL injectable.")
-        return url
-    else:
-        tqdm.write(f"{url} seems not to be SQL injectable.")
-        return None
 
 def read_proxies(proxy_file):
-    if not os.path.isfile(proxy_file):
-        raise FileNotFoundError(f"{proxy_file} not found.")
-    try:
-        with open(proxy_file, "r") as f:
-            return [line.strip() for line in f.readlines() if line.strip()]
-    except IOError as e:
-        print(f"Error reading proxies file: {e}")
-        sys.exit(1)
-
-def verify_files(files):
-    for file in files:
-        if not os.path.isfile(file):
-            raise FileNotFoundError(f"{file} not found.")
-        try:
-            with open(file, "r") as f:
-                content = f.read().strip()
-                if not content:
-                    raise ValueError(f"{file} is empty. Please make sure it contains valid data.")
-        except IOError as e:
-            print(f"Error reading {file}: {e}")
-            sys.exit(1)
+    return SQLInjectionChecker._read_file(proxy_file)
 
 
-def main(args):
-    print("Made With Love By Th3 Gr34T F4LC0N")
-    input("Press Enter to start checking URLs...")
+def load_urls(file_path):
+    return SQLInjectionChecker._read_file(file_path)
 
-    # Verify payloads and SQL error patterns files
-    verify_files(["payloads.txt", "sql-patterns.txt"])
 
-    proxy_list = read_proxies(args.proxies)
-
-    checker = SQLInjectionChecker(proxy_list, args.timeout)
-
-    try:
-        with open(args.urls, "r", encoding="utf-8") as f:
-            urls = f.readlines()
-    except IOError as e:
-        print(f"Error reading URLs file: {e}")
-        sys.exit(1)
-
+def process_urls(urls, checker, stdscr, args):
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        futures = [executor.submit(lambda url: check_url(url.strip(), checker), url) for url in urls]
+        futures = [executor.submit(lambda url: check_url(url, checker, stdscr, args.min_delay, args.max_delay), url) for url in urls]
 
-        # Use tqdm to create a progress bar
-        with tqdm(total=len(futures)) as pbar:
+        with tqdm(total=len(futures), bar_format="{percentage:3.0f}%|{bar}| {n}/{total}") as pbar:
             for future in as_completed(futures):
                 try:
-                    # Check for exceptions that occurred within the check_url function
                     if future.exception() is not None:
                         print(f"Error processing URL: {future.exception()}")
                     elif future.result() is not None:
@@ -148,37 +157,89 @@ def main(args):
                 except Exception as e:
                     print(f"Error handling future: {e}")
 
-    # Use tqdm to create a progress bar
-    with tqdm(total=len(futures)) as pbar:
-        for future in as_completed(futures):
-            # Update the progress bar after each completed task
-            if future.result() is not None:
-                pbar.update(1)
+        return [future.result() for future in futures if future.result() is not None]
 
-    # Get the results from the futures
-    results = [future.result() for future in futures if future.result() is not None]
 
+def save_results(results, output_file):
     try:
-        with open(args.output, "w") as f:
+        with open(output_file, "w") as f:
             for result in results:
                 f.write(f"{result}\n")
     except IOError as e:
         print(f"Error writing to the output file: {e}")
         sys.exit(1)
 
-    # Add a report at the end with the number of working URLs in green color
-    print(Fore.GREEN + f"Number of Working URLs: {len(results)}" + Fore.RESET)
 
+def main(stdscr, args):
+    # Clear the screen and turn off cursor
+    stdscr.clear()
+    curses.curs_set(0)
+
+    # Initialize color pairs
+    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+
+    # Print the banner
+    print_banner(stdscr)
+
+    proxy_list = read_proxies(args.proxies)
+    urls = load_urls(args.urls)
+
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(2, 0, "SQL Patterns Loaded: ")
+    stdscr.attroff(curses.color_pair(1))
+    
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(2, 20, str(len(SQLInjectionChecker._read_file('sql-patterns.txt'))))
+    stdscr.attroff(curses.color_pair(2))
+
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(3, 0, "Payloads Loaded: ")
+    stdscr.attroff(curses.color_pair(1))
+
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(3, 16, str(len(SQLInjectionChecker._read_file('payloads.txt'))))
+    stdscr.attroff(curses.color_pair(2))
+
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(4, 0, "URLs Loaded: ")
+    stdscr.attroff(curses.color_pair(1))
+
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(4, 12, str(len(urls)))
+    stdscr.attroff(curses.color_pair(2))
+
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(5, 0, "Proxies Loaded: ")
+    stdscr.attroff(curses.color_pair(1))
+
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(5, 15, str(len(proxy_list)))
+    stdscr.attroff(curses.color_pair(2))
+
+    stdscr.refresh()
+
+    checker = SQLInjectionChecker(proxy_list)
+    checker.total_urls = len(urls)
+
+    # Start the stats update thread
+    stats_thread = threading.Thread(target=update_stats_periodically, args=(stdscr, checker))
+    stats_thread.daemon = True
+    stats_thread.start()
+    
+    injectable_urls = process_urls(urls, checker, stdscr, args)
+
+    save_results(injectable_urls, args.output)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SQL Injection Checker")
-    parser.add_argument("--urls", type=str, default="urls.txt", help="Path to the file containing URLs")
-    parser.add_argument("--proxies", type=str, default="proxies.txt", help="Path to the file containing proxies")
-    parser.add_argument("--timeout", type=int, default=10, help="Request timeout in seconds")
-    parser.add_argument("--output", type=str, default="result.txt", help="Output file for saving SQL injectable URLs")
-    parser.add_argument("--threads", type=int, default=50, help="Number of concurrent threads")
-    parser.add_argument("--min_delay", type=float, default=1.0, help="Minimum delay between requests in seconds")
-    parser.add_argument("--max_delay", type=float, default=3.0, help="Maximum delay between requests in seconds")
+    parser = argparse.ArgumentParser(description="Falcon URL Checker")
+    parser.add_argument("-p", "--proxies", required=True, help="Path to the proxies file.")
+    parser.add_argument("-u", "--urls", required=True, help="Path to the URLs file.")
+    parser.add_argument("-o", "--output", required=True, help="Path to the output file.")
+    parser.add_argument("-t", "--threads", type=int, default=10, help="Number of threads (default: 10).")
+    parser.add_argument("--min-delay", type=float, default=0.5, help="Minimum delay between requests in seconds (default: 0.5).")
+    parser.add_argument("--max-delay", type=float, default=1.5, help="Maximum delay between requests in seconds (default: 1.5).")
 
     args = parser.parse_args()
-    main(args)
+
+    curses.wrapper(main, args)
