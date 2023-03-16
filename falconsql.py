@@ -1,13 +1,18 @@
+#!/usr/bin/env python3
 import requests
 import re
 import sys
 import argparse
+import os
 from itertools import cycle
 import urllib3
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import random
 from colorama import init, Fore
+from tqdm import tqdm
+from requests.exceptions import ProxyError
+
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -39,6 +44,10 @@ class SQLInjectionChecker:
             for payload in self.payloads:
                 injected_url = url.replace("[t]", payload)
                 proxy = self.get_next_proxy()
+
+                # Print the proxy being used for the current request
+                print(f"Using proxy: {proxy} for URL: {injected_url}")
+
                 response = requests.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
 
                 for error in self.sql_errors:
@@ -53,18 +62,23 @@ class SQLInjectionChecker:
 def check_url(url, checker):
     time.sleep(random.uniform(args.min_delay, args.max_delay))  # Add a random delay between requests
     if checker.check_sql_injection(url):
-        print(f"{url} might be SQL injectable.")
+        tqdm.write(f"{url} might be SQL injectable.")
         return url
     else:
-        print(f"{url} seems not to be SQL injectable.")
+        tqdm.write(f"{url} seems not to be SQL injectable.")
         return None
 
+def read_proxies(proxy_file):
+    if not os.path.isfile(proxy_file):
+        raise FileNotFoundError(f"{proxy_file} not found.")
+    with open(proxy_file, "r") as f:
+        return [line.strip() for line in f.readlines() if line.strip()]
 
 def main(args):
     print("Made With Love By Th3 Gr34T F4LC0N")
     input("Press Enter to start checking URLs...")
 
-    proxy_list = args.proxies.split(',')
+    proxy_list = read_proxies(args.proxies)
 
     checker = SQLInjectionChecker(proxy_list, args.timeout)
 
@@ -72,9 +86,17 @@ def main(args):
         urls = f.readlines()
 
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        results = list(executor.map(lambda url: check_url(url.strip(), checker), urls))
+        futures = [executor.submit(lambda url: check_url(url.strip(), checker), url) for url in urls]
 
-    results = [result for result in results if result is not None]
+        # Use tqdm to create a progress bar
+        with tqdm(total=len(futures)) as pbar:
+            for future in as_completed(futures):
+                # Update the progress bar after each completed task
+                if future.result() is not None:
+                    pbar.update(1)
+
+    # Get the results from the futures
+    results = [future.result() for future in futures if future.result() is not None]
 
     with open(args.output, "w") as f:
         for result in results:
@@ -83,16 +105,16 @@ def main(args):
     # Add a report at the end with the number of working URLs in green color
     print(Fore.GREEN + f"Number of Working URLs: {len(results)}" + Fore.RESET)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SQL Injection Checker")
     parser.add_argument("--urls", type=str, default="urls.txt", help="Path to the file containing URLs")
-    parser.add_argument("--proxies", type=str, default="http://127.0.0.1:24000,http://127.0.0.1:24001,http://127.0.0.1:24002", help="Comma-separated list of proxies")
+    parser.add_argument("--proxies", type=str, default="proxies.txt", help="Path to the file containing proxies")
     parser.add_argument("--timeout", type=int, default=10, help="Request timeout in seconds")
     parser.add_argument("--output", type=str, default="result.txt", help="Output file for saving SQL injectable URLs")
-    parser.add_argument("--threads", type=int, default=5, help="Number of concurrent threads")
+    parser.add_argument("--threads", type=int, default=50, help="Number of concurrent threads")
     parser.add_argument("--min_delay", type=float, default=1.0, help="Minimum delay between requests in seconds")
     parser.add_argument("--max_delay", type=float, default=3.0, help="Maximum delay between requests in seconds")
 
     args = parser.parse_args()
     main(args)
-
