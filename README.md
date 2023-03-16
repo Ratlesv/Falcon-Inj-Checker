@@ -1,4 +1,5 @@
 This script is a Python-based SQL injection checker that scans a list of URLs to identify possible SQL injection vulnerabilities. The script reads URLs from a file and checks them using different payloads and proxies to bypass security measures. If an SQL injection vulnerability is found, the script reports the URL as potentially SQL injectable.
+
 Here's a summary of the script's main features:
     1. It reads a list of URLs from a file provided as a command-line argument.
     2. It uses a list of proxies from a file to rotate through during the checking process.
