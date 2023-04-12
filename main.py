@@ -1,17 +1,26 @@
+import argparse
+import asyncio
+import aiohttp
+import curses
+import itertools
 import os
 import sys
 import random
 import time
 import re
-import argparse
-import curses
 import threading
+import traceback
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from requests.exceptions import ProxyError
+import logging.config
 import requests
 import urllib3
+from logging.handlers import RotatingFileHandler
 from colorama import init, Fore
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import cycle
+from requests.exceptions import ProxyError
+from aiohttp import ClientSession, ClientTimeout
+from aiohttp.client_exceptions import ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError
 from tqdm import tqdm
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -19,12 +28,38 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 init(autoreset=False)  # Initialize colorama without auto-reset
 
 def setup_logging():
-    logging.basicConfig(
-        filename="url_checker.log",
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    config = {
+        "version": 1,
+        "formatters": {
+            "default": {
+                "format": "%(asctime)s - %(levelname)s - %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            }
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "default",
+                "level": "DEBUG",
+            },
+            "file": {
+                "()": RotatingFileHandler,  # Use custom handler class
+                "filename": "logfile.log",
+                "formatter": "default",
+                "level": "INFO",
+                "maxBytes": 10 * 1024 * 1024,  # Set max file size to 10 MB
+                "backupCount": 3,  # Keep up to 3 backup files
+            },
+        },
+        "loggers": {
+            "": {
+                "handlers": ["console", "file"],
+                "level": "DEBUG",
+            }
+        },
+    }
+
+    logging.config.dictConfig(config)
     
 def print_banner(stdscr):
     stdscr.attron(curses.color_pair(1))
@@ -44,16 +79,28 @@ def print_banner(stdscr):
 def update_statistics(stdscr, current_url, proxies, processed_urls, total_urls, injectable_count, start_time):
     elapsed_time = time.time() - start_time
     elapsed_minutes, elapsed_seconds = divmod(elapsed_time, 60)
-    
-    stdscr.addstr(6, 0, f"Current URL: {current_url}")
-    stdscr.addstr(7, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(8, 0, "")  # Add an empty line for spacing
+
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(7, 0, "**********************************")
+    stdscr.attroff(curses.color_pair(2))
+    stdscr.addstr(8, 0, f"Current URL: {current_url}")
     stdscr.addstr(9, 0, "")  # Add an empty line for spacing
     stdscr.addstr(10, 0, "")  # Add an empty line for spacing
     stdscr.addstr(11, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(12, 0, f"Processed URLs: {processed_urls}/{total_urls}")
-    stdscr.addstr(13, 0, f"Injectable URLs Found: {injectable_count}")
-    stdscr.addstr(14, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
+    stdscr.addstr(12, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(13, 0, "")  # Add an empty line for spacing
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(14, 0, "**********************************")
+    stdscr.attroff(curses.color_pair(2))    
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(15, 0, f"Processed URLs: {processed_urls}/{total_urls}")
+    stdscr.attroff(curses.color_pair(1))
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(16, 0, f"Injectable URLs Found: {injectable_count}")
+    stdscr.attroff(curses.color_pair(1))
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(17, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
+    stdscr.attroff(curses.color_pair(1))
     stdscr.refresh()
 
 def update_stats_periodically(stdscr, checker, delay=2):
@@ -83,11 +130,21 @@ def handle_request_errors(func):
 
     return wrapper
 
+def user_agent_cycle():
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    ]
+    return cycle(user_agents)
 
 class SQLInjectionChecker:
     def __init__(self, proxy_list, timeout=10, payloads_file="payloads.txt", sql_patterns_file="sql-patterns.txt"):
         self.proxies = proxy_list
         self.timeout = timeout
+        self.user_agents = user_agent_cycle()
         self.payloads = self._read_file(payloads_file)
         self.sql_errors = self._read_file(sql_patterns_file)
         self.current_url = ""
@@ -95,6 +152,7 @@ class SQLInjectionChecker:
         self.total_urls = 0
         self.injectable_count = 0
         self.start_time = time.time()
+        self.proxy_generator = self.proxy_cycle()
 
     @staticmethod
     def _read_file(file_path):
@@ -109,20 +167,21 @@ class SQLInjectionChecker:
     def request_injected_url(self, injected_url, proxy, headers):
         return requests.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
 
-    def get_random_proxy(self):
-        return random.choice(self.proxies)
+    def proxy_cycle(self):
+        return cycle(self.proxies)
 
     def check_sql_injection(self, url, retries=3):
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
-        }
-
         for _ in range(retries):
             for payload in self.payloads:
                 injected_url = url.replace("[t]", payload)
-                proxy = self.get_random_proxy()
+                proxy = next(self.proxy_generator)
 
                 print(f"Using proxy: {proxy} for URL: {injected_url}")
+
+                # Rotate the User-Agent for each request
+                headers = {
+                    "User-Agent": next(self.user_agents),
+                }
 
                 response = self.request_injected_url(injected_url, proxy, headers)
 
@@ -134,6 +193,9 @@ class SQLInjectionChecker:
         return False
 
 def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
+    logging.info(f"Processing URL: {url}")
+    is_injectable = None
+
     try:
         time.sleep(random.uniform(min_delay, max_delay))
         is_injectable = checker.check_sql_injection(url)
@@ -144,12 +206,11 @@ def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
             with open(output_file, "a") as f:
                 f.write(f"{url}\n")
             logging.info(f"Injectable URL found: {url}")
-
-        update_statistics(stdscr, url, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
-        return url if is_injectable else None
     except Exception as e:
         logging.error(f"Error processing URL {url}: {e}")
-        return None
+
+    update_statistics(stdscr, url, checker.proxies, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
+    return url if is_injectable else None
 
 def read_proxies(proxy_file):
     return SQLInjectionChecker._read_file(proxy_file)
@@ -170,8 +231,8 @@ def process_urls(urls, checker, stdscr, args):
                         logging.error(f"Error processing URL: {future.exception()}")
                     elif future.result() is not None:
                         pbar.update(1)
-                except Exception as e:
-                    logging.error(f"Error handling future: {e}")
+                except Exception:
+                    logging.exception(f"Error processing URL {url}")
 
         return [future.result() for future in futures if future.result() is not None]
 def save_results(results, output_file):
@@ -183,6 +244,19 @@ def save_results(results, output_file):
         print(f"Error writing to the output file: {e}")
         sys.exit(1)
 
+def check_file_path(path):
+    if not os.path.isfile(path):
+        raise argparse.ArgumentTypeError(f"{path} is not a valid file path")
+    return path
+
+def check_positive_float(value):
+    try:
+        f_value = float(value)
+        if f_value <= 0:
+            raise argparse.ArgumentTypeError(f"{value} must be a positive float")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value} is not a valid float")
+    return f_value
 
 def main(stdscr, args):
     # Clear the screen and turn off cursor
@@ -231,6 +305,14 @@ def main(stdscr, args):
     stdscr.addstr(5, 15, str(len(proxy_list)))
     stdscr.attroff(curses.color_pair(2))
 
+    stdscr.attron(curses.color_pair(1))
+    stdscr.addstr(6, 0, "Threads: ")
+    stdscr.attroff(curses.color_pair(1))
+
+    stdscr.attron(curses.color_pair(2))
+    stdscr.addstr(6, 9, str(args.threads))
+    stdscr.attroff(curses.color_pair(2))
+
     stdscr.refresh()
 
     checker = SQLInjectionChecker(proxy_list)
@@ -248,13 +330,13 @@ def main(stdscr, args):
 
 if __name__ == "__main__":
     setup_logging()
-    parser = argparse.ArgumentParser(description="Falcon URL Checker")
-    parser.add_argument("-p", "--proxies", required=True, help="Path to the proxies file.")
-    parser.add_argument("-u", "--urls", required=True, help="Path to the URLs file.")
+    parser = argparse.ArgumentParser(description="Th3-GR34T-F4LC0N URL INJ Checker")
+    parser.add_argument("-p", "--proxies", required=True, type=check_file_path, help="Path to the proxies file.")
+    parser.add_argument("-u", "--urls", required=True, type=check_file_path, help="Path to the URLs file.")
     parser.add_argument("-o", "--output", required=True, help="Path to the output file.")
-    parser.add_argument("-t", "--threads", type=int, default=10, help="Number of threads (default: 10).")
-    parser.add_argument("--min-delay", type=float, default=0.5, help="Minimum delay between requests in seconds (default: 0.5).")
-    parser.add_argument("--max-delay", type=float, default=1.5, help="Maximum delay between requests in seconds (default: 1.5).")
+    parser.add_argument("-t", "--threads", type=int, default=10, choices=range(1, 101), help="Number of threads (default: 10).")
+    parser.add_argument("--min-delay", type=check_positive_float, default=0.5, help="Minimum delay between requests in seconds (default: 0.5).")
+    parser.add_argument("--max-delay", type=check_positive_float, default=1.5, help="Maximum delay between requests in seconds (default: 1.5).")
 
     args = parser.parse_args()
 
