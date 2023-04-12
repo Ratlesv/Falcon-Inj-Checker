@@ -89,17 +89,22 @@ def update_statistics(stdscr, current_url, proxies, processed_urls, total_urls, 
     stdscr.addstr(11, 0, "")  # Add an empty line for spacing
     stdscr.addstr(12, 0, "")  # Add an empty line for spacing
     stdscr.addstr(13, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(14, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(15, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(16, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(17, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(18, 0, "")  # Add an empty line for spacing
     stdscr.attron(curses.color_pair(2))
-    stdscr.addstr(14, 0, "**********************************")
+    stdscr.addstr(19, 0, "**********************************")
     stdscr.attroff(curses.color_pair(2))    
     stdscr.attron(curses.color_pair(1))
-    stdscr.addstr(15, 0, f"Processed URLs: {processed_urls}/{total_urls}")
+    stdscr.addstr(20, 0, f"Processed URLs: {processed_urls}/{total_urls}")
     stdscr.attroff(curses.color_pair(1))
     stdscr.attron(curses.color_pair(1))
-    stdscr.addstr(16, 0, f"Injectable URLs Found: {injectable_count}")
+    stdscr.addstr(21, 0, f"Injectable URLs Found: {injectable_count}")
     stdscr.attroff(curses.color_pair(1))
     stdscr.attron(curses.color_pair(1))
-    stdscr.addstr(17, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
+    stdscr.addstr(22, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
     stdscr.attroff(curses.color_pair(1))
     stdscr.refresh()
 
