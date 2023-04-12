@@ -6,6 +6,7 @@ import re
 import argparse
 import curses
 import threading
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.exceptions import ProxyError
 import requests
@@ -17,7 +18,14 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 init(autoreset=False)  # Initialize colorama without auto-reset
 
-
+def setup_logging():
+    logging.basicConfig(
+        filename="url_checker.log",
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    
 def print_banner(stdscr):
     stdscr.attron(curses.color_pair(1))
     stdscr.addstr(0, 0, "Made with love by ")
@@ -33,22 +41,25 @@ def print_banner(stdscr):
     
     stdscr.refresh()
 
-def update_statistics(stdscr, current_url, processed_urls, total_urls, injectable_count, start_time):
+def update_statistics(stdscr, current_url, proxies, processed_urls, total_urls, injectable_count, start_time):
     elapsed_time = time.time() - start_time
     elapsed_minutes, elapsed_seconds = divmod(elapsed_time, 60)
     
-    stdscr.addstr(4, 0, f"Current URL: {current_url}")
-    stdscr.addstr(5, 0, f"Processed URLs: {processed_urls}/{total_urls}")
-    stdscr.addstr(6, 0, f"Injectable URLs Found: {injectable_count}")
-    stdscr.addstr(7, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
+    stdscr.addstr(6, 0, f"Current URL: {current_url}")
+    stdscr.addstr(7, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(8, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(9, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(10, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(11, 0, "")  # Add an empty line for spacing
+    stdscr.addstr(12, 0, f"Processed URLs: {processed_urls}/{total_urls}")
+    stdscr.addstr(13, 0, f"Injectable URLs Found: {injectable_count}")
+    stdscr.addstr(14, 0, f"Elapsed Time: {int(elapsed_minutes):02d}:{int(elapsed_seconds):02d}")
     stdscr.refresh()
 
 def update_stats_periodically(stdscr, checker, delay=2):
     while True:
         time.sleep(delay)
-        update_statistics(stdscr, checker.current_url, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
-
-
+        update_statistics(stdscr, checker.current_url, checker.proxies, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
 
 def handle_request_errors(func):
     def wrapper(*args, **kwargs):
@@ -122,18 +133,23 @@ class SQLInjectionChecker:
 
         return False
 
+def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
+    try:
+        time.sleep(random.uniform(min_delay, max_delay))
+        is_injectable = checker.check_sql_injection(url)
+        checker.current_url = url
+        checker.processed_urls += 1
+        if is_injectable:
+            checker.injectable_count += 1
+            with open(output_file, "a") as f:
+                f.write(f"{url}\n")
+            logging.info(f"Injectable URL found: {url}")
 
-def check_url(url, checker, stdscr, min_delay, max_delay):
-    time.sleep(random.uniform(min_delay, max_delay))
-    is_injectable = checker.check_sql_injection(url)
-    checker.current_url = url
-    checker.processed_urls += 1
-    if is_injectable:
-        checker.injectable_count += 1
-
-    update_statistics(stdscr, url, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
-    return url if is_injectable else None
-
+        update_statistics(stdscr, url, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
+        return url if is_injectable else None
+    except Exception as e:
+        logging.error(f"Error processing URL {url}: {e}")
+        return None
 
 def read_proxies(proxy_file):
     return SQLInjectionChecker._read_file(proxy_file)
@@ -145,21 +161,19 @@ def load_urls(file_path):
 
 def process_urls(urls, checker, stdscr, args):
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        futures = [executor.submit(lambda url: check_url(url, checker, stdscr, args.min_delay, args.max_delay), url) for url in urls]
+        futures = [executor.submit(lambda url: check_url(url, checker, stdscr, args.min_delay, args.max_delay, args.output), url) for url in urls]
 
-        with tqdm(total=len(futures), bar_format="{percentage:3.0f}%|{bar}| {n}/{total}") as pbar:
+        with tqdm(total=len(futures), bar_format="{percentage:3.0f}%|{bar}| {n}/{total}", file=sys.stderr) as pbar:
             for future in as_completed(futures):
                 try:
                     if future.exception() is not None:
-                        print(f"Error processing URL: {future.exception()}")
+                        logging.error(f"Error processing URL: {future.exception()}")
                     elif future.result() is not None:
                         pbar.update(1)
                 except Exception as e:
-                    print(f"Error handling future: {e}")
+                    logging.error(f"Error handling future: {e}")
 
         return [future.result() for future in futures if future.result() is not None]
-
-
 def save_results(results, output_file):
     try:
         with open(output_file, "w") as f:
@@ -221,6 +235,7 @@ def main(stdscr, args):
 
     checker = SQLInjectionChecker(proxy_list)
     checker.total_urls = len(urls)
+    update_statistics(stdscr, checker.current_url, proxy_list, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
 
     # Start the stats update thread
     stats_thread = threading.Thread(target=update_stats_periodically, args=(stdscr, checker))
@@ -232,6 +247,7 @@ def main(stdscr, args):
     save_results(injectable_urls, args.output)
 
 if __name__ == "__main__":
+    setup_logging()
     parser = argparse.ArgumentParser(description="Falcon URL Checker")
     parser.add_argument("-p", "--proxies", required=True, help="Path to the proxies file.")
     parser.add_argument("-u", "--urls", required=True, help="Path to the URLs file.")
