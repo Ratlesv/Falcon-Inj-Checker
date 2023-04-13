@@ -143,6 +143,7 @@ class SQLInjectionChecker:
         self.user_agents = user_agent_cycle()
         self.payloads = self._read_file(payloads_file)
         self.sql_errors = self._read_file(sql_patterns_file)
+        self.compiled_sql_errors = [re.compile(pattern) for pattern in self.sql_errors]
         self.current_url = ""
         self.processed_urls = 0
         self.total_urls = 0
@@ -170,9 +171,13 @@ class SQLInjectionChecker:
                 return None
 
     async def check_sql_injection(self, url, retries=3):
+        # Retry the process 'retries' number of times
         for _ in range(retries):
+            # Iterate through the payloads to test for SQL injection
             for payload in self.payloads:
+                # Replace the target placeholder with the payload
                 injected_url = url.replace("[t]", payload)
+                # Get the next proxy from the proxy cycle
                 proxy = next(self.proxy_cycle)
 
                 print(f"Using proxy: {proxy} for URL: {injected_url}")
@@ -182,13 +187,17 @@ class SQLInjectionChecker:
                     "User-Agent": next(self.user_agents),
                 }
 
+                # Request the injected URL using the current proxy and headers
                 response_text = await self.request_injected_url(injected_url, proxy, headers)
 
+                # If a response is received, check for SQL errors in the response text
                 if response_text is not None:
                     for error in self.sql_errors:
+                        # If an error is found, return True to indicate a successful SQL injection
                         if re.search(error, response_text, re.IGNORECASE):
                             return True  # Break out of all loops and move to the next URL
 
+        # If no successful SQL injection is detected, return False
         return False
 
 async def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
