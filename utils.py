@@ -190,7 +190,7 @@ class SQLInjectionChecker:
                 if response is not None:
                     for error in self.sql_errors:
                         if re.search(error, response.text, re.IGNORECASE):
-                            return True
+                            return True  # Break out of all loops and move to the next URL
 
         return False
 
