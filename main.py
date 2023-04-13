@@ -22,15 +22,14 @@ from requests.exceptions import ProxyError
 from aiohttp import ClientSession, ClientTimeout
 from aiohttp.client_exceptions import ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError
 from tqdm import tqdm
-
-# Import the necessary utilities from utils.py
+from utils import check_url
 from utils import setup_logging, print_banner, update_statistics, update_stats_periodically, handle_request_errors, user_agent_cycle, SQLInjectionChecker, read_proxies, load_urls, process_urls, save_results ,check_file_path ,check_positive_float
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 init(autoreset=False)  # Initialize colorama without auto-reset
 
-def main(stdscr, args):
+async def main(stdscr, args):
     # Clear the screen and turn off cursor
     stdscr.clear()
     curses.curs_set(0)
@@ -87,8 +86,16 @@ def main(stdscr, args):
 
     stdscr.refresh()
 
-    checker = SQLInjectionChecker(proxy_list)
+    checker = SQLInjectionChecker(proxy_list, args.timeout)
+    
     checker.total_urls = len(urls)
+
+    tasks = [check_url(url, checker, stdscr, args.min_delay, args.max_delay, args.output) for url in urls]
+    
+    results = await asyncio.gather(*tasks)
+
+    save_results(results, args.output)
+
     update_statistics(stdscr, checker.current_url, proxy_list, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
 
     # Start the stats update thread
@@ -107,9 +114,14 @@ if __name__ == "__main__":
     parser.add_argument("-u", "--urls", required=True, type=check_file_path, help="Path to the URLs file.")
     parser.add_argument("-o", "--output", required=True, help="Path to the output file.")
     parser.add_argument("-t", "--threads", type=int, default=10, choices=range(1, 101), help="Number of threads (default: 10).")
+    parser.add_argument("--timeout", type=check_positive_float, default=10, help="Request timeout in seconds (default: 10)")
     parser.add_argument("--min-delay", type=check_positive_float, default=0.5, help="Minimum delay between requests in seconds (default: 0.5).")
     parser.add_argument("--max-delay", type=check_positive_float, default=1.5, help="Maximum delay between requests in seconds (default: 1.5).")
 
     args = parser.parse_args()
-
-    curses.wrapper(main, args)
+    
+    try:
+        asyncio.run(curses.wrapper(main, args))
+    except KeyboardInterrupt:
+        print("Program interrupted by user.")
+    

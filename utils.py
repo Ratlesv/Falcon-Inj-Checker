@@ -23,6 +23,7 @@ from aiohttp import ClientSession, ClientTimeout
 from aiohttp.client_exceptions import ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError
 from tqdm import tqdm
 
+
 def setup_logging():
     config = {
         "version": 1,
@@ -80,16 +81,9 @@ def update_statistics(stdscr, current_url, proxies, processed_urls, total_urls, 
     stdscr.addstr(7, 0, "**********************************")
     stdscr.attroff(curses.color_pair(2))
     stdscr.addstr(8, 0, f"Current URL: {current_url}")
-    stdscr.addstr(9, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(10, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(11, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(12, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(13, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(14, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(15, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(16, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(17, 0, "")  # Add an empty line for spacing
-    stdscr.addstr(18, 0, "")  # Add an empty line for spacing
+    for i in range(9, 19):
+        stdscr.addstr(i, 0, "")  # Clear lines
+        stdscr.clrtoeol()
     stdscr.attron(curses.color_pair(2))
     stdscr.addstr(19, 0, "**********************************")
     stdscr.attroff(curses.color_pair(2))    
@@ -166,13 +160,16 @@ class SQLInjectionChecker:
             sys.exit(1)
 
     @handle_request_errors
-    def request_injected_url(self, injected_url, proxy, headers):
-        return httpx.get(injected_url, proxies={"http://": proxy, "https://": proxy}, headers=headers, timeout=self.timeout, verify=False)
-    
-    def proxy_cycle(self):
-        return cycle(self.proxies)
+    async def request_injected_url(self, injected_url, proxy, headers):
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(injected_url, proxy=proxy, headers=headers, timeout=self.timeout) as response:
+                    return await response.text()
+            except (ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError) as e:
+                print(f"Error while sending request: {e}")
+                return None
 
-    def check_sql_injection(self, url, retries=3):
+    async def check_sql_injection(self, url, retries=3):
         for _ in range(retries):
             for payload in self.payloads:
                 injected_url = url.replace("[t]", payload)
@@ -185,22 +182,22 @@ class SQLInjectionChecker:
                     "User-Agent": next(self.user_agents),
                 }
 
-                response = self.request_injected_url(injected_url, proxy, headers)
+                response_text = await self.request_injected_url(injected_url, proxy, headers)
 
-                if response is not None:
+                if response_text is not None:
                     for error in self.sql_errors:
-                        if re.search(error, response.text, re.IGNORECASE):
+                        if re.search(error, response_text, re.IGNORECASE):
                             return True  # Break out of all loops and move to the next URL
 
         return False
 
-def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
+async def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
     logging.info(f"Processing URL: {url}")
     is_injectable = None
 
     try:
-        time.sleep(random.uniform(min_delay, max_delay))
-        is_injectable = checker.check_sql_injection(url)
+        await asyncio.sleep(random.uniform(min_delay, max_delay))
+        is_injectable = await checker.check_sql_injection(url)
         checker.current_url = url
         checker.processed_urls += 1
         if is_injectable:
@@ -213,7 +210,7 @@ def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
 
     update_statistics(stdscr, url, checker.proxies, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
     return url if is_injectable else None
-
+    pass
 def read_proxies(file_path):
     proxies = []
     with open(file_path, 'r') as file:
