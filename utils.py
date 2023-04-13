@@ -12,13 +12,11 @@ import threading
 import traceback
 import logging
 import logging.config
-import requests
-import urllib3
+import httpx
 from logging.handlers import RotatingFileHandler
 from colorama import init, Fore
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
-from requests.exceptions import ProxyError
 from aiohttp import ClientSession, ClientTimeout
 from aiohttp.client_exceptions import ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError
 from tqdm import tqdm
@@ -113,17 +111,17 @@ def handle_request_errors(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             print(f"Error while sending request: {e}")
-        except ProxyError as e:
+        except httpx.ProxyError as e:
             print(f"Error with proxy: {e}")
-        except requests.exceptions.Timeout as e:
+        except httpx.TimeoutException as e:
             print(f"Request timed out: {e}")
-        except requests.exceptions.TooManyRedirects as e:
+        except httpx.TooManyRedirects as e:
             print(f"Too many redirects: {e}")
-        except requests.exceptions.SSLError as e:
-            print(f"SSL/TLS error: {e}")
-        except requests.exceptions.ConnectionError as e:
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP status error: {e}")
+        except httpx.ConnectError as e:
             print(f"Connection error: {e}")
         except Exception as e:
             print(f"Unexpected error: {e}")
@@ -166,8 +164,8 @@ class SQLInjectionChecker:
 
     @handle_request_errors
     def request_injected_url(self, injected_url, proxy, headers):
-        return requests.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
-
+        return httpx.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
+    
     def proxy_cycle(self):
         return cycle(self.proxies)
 

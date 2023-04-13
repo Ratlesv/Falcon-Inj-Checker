@@ -12,13 +12,11 @@ import threading
 import traceback
 import logging
 import logging.config
-import requests
-import urllib3
+import httpx
 from logging.handlers import RotatingFileHandler
 from colorama import init, Fore
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
-from requests.exceptions import ProxyError
 from aiohttp import ClientSession, ClientTimeout
 from aiohttp.client_exceptions import ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError
 from tqdm import tqdm
