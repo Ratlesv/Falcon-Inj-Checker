@@ -13,10 +13,12 @@ import traceback
 import logging
 import logging.config
 import httpx
+import urllib3
 from logging.handlers import RotatingFileHandler
 from colorama import init, Fore
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
+from requests.exceptions import ProxyError
 from aiohttp import ClientSession, ClientTimeout
 from aiohttp.client_exceptions import ClientConnectorError, ClientProxyConnectionError, ServerTimeoutError
 from tqdm import tqdm
@@ -142,6 +144,7 @@ def user_agent_cycle():
 class SQLInjectionChecker:
     def __init__(self, proxy_list, timeout=10, payloads_file="payloads.txt", sql_patterns_file="sql-patterns.txt"):
         self.proxies = proxy_list
+        self.current_proxy = 0
         self.timeout = timeout
         self.user_agents = user_agent_cycle()
         self.payloads = self._read_file(payloads_file)
@@ -151,7 +154,7 @@ class SQLInjectionChecker:
         self.total_urls = 0
         self.injectable_count = 0
         self.start_time = time.time()
-        self.proxy_generator = self.proxy_cycle()
+        self.proxy_cycle = cycle(self.proxies)
 
     @staticmethod
     def _read_file(file_path):
@@ -164,7 +167,7 @@ class SQLInjectionChecker:
 
     @handle_request_errors
     def request_injected_url(self, injected_url, proxy, headers):
-        return httpx.get(injected_url, proxies={"http": proxy, "https": proxy}, headers=headers, timeout=self.timeout, verify=False)
+        return httpx.get(injected_url, proxies={"http://": proxy, "https://": proxy}, headers=headers, timeout=self.timeout, verify=False)
     
     def proxy_cycle(self):
         return cycle(self.proxies)
@@ -173,7 +176,7 @@ class SQLInjectionChecker:
         for _ in range(retries):
             for payload in self.payloads:
                 injected_url = url.replace("[t]", payload)
-                proxy = next(self.proxy_generator)
+                proxy = next(self.proxy_cycle)
 
                 print(f"Using proxy: {proxy} for URL: {injected_url}")
 
@@ -211,9 +214,15 @@ def check_url(url, checker, stdscr, min_delay, max_delay, output_file):
     update_statistics(stdscr, url, checker.proxies, checker.processed_urls, checker.total_urls, checker.injectable_count, checker.start_time)
     return url if is_injectable else None
 
-def read_proxies(proxy_file):
-    return SQLInjectionChecker._read_file(proxy_file)
-
+def read_proxies(file_path):
+    proxies = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            proxy = line.strip()
+            if not proxy.startswith("http://") and not proxy.startswith("https://"):
+                proxy = "http://" + proxy
+            proxies.append(proxy)
+    return proxies
 
 def load_urls(file_path):
     return SQLInjectionChecker._read_file(file_path)
