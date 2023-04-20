@@ -11,10 +11,10 @@ def split_file(filename, lines_per_file):
             file_count += 1
     os.remove(filename)
 
-no_file = 'no.txt_0'
+no_file = 'domains.txt'
 with open(no_file, 'r') as f:
     # extract the integer value from the first line of the file
     first_line = f.readline()
     num_lines = int(re.search(r'\d+', first_line).group())
 
-split_file('no.txt_0', 10000)
+split_file('domains.txt', 20000)
