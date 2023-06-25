@@ -1,0 +1,84 @@
+-- phpMyAdmin SQL Dump
+-- version 5.0.4
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost
+-- Generation Time: Jun 26, 2023 at 04:37 AM
+-- Server version: 5.7.42-log
+-- PHP Version: 8.0.26
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Database: `waziper2023`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sp_users`
+--
+
+CREATE TABLE `sp_users` (
+  `id` int(11) NOT NULL,
+  `ids` mediumtext,
+  `pid` text,
+  `is_admin` int(1) DEFAULT NULL,
+  `role` int(11) DEFAULT NULL,
+  `fullname` varchar(255) DEFAULT NULL,
+  `username` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password` varchar(255) DEFAULT NULL,
+  `plan` int(11) DEFAULT NULL,
+  `expiration_date` int(11) DEFAULT NULL,
+  `timezone` mediumtext,
+  `language` varchar(30) DEFAULT NULL,
+  `login_type` mediumtext,
+  `avatar` varchar(255) DEFAULT NULL,
+  `data` mediumtext,
+  `status` int(11) DEFAULT NULL,
+  `last_login` int(11) DEFAULT NULL,
+  `recovery_key` varchar(32) DEFAULT NULL,
+  `changed` int(11) DEFAULT NULL,
+  `created` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
+
+--
+-- Dumping data for table `sp_users`
+--
+
+INSERT INTO `sp_users` (`id`, `ids`, `pid`, `is_admin`, `role`, `fullname`, `username`, `email`, `password`, `plan`, `expiration_date`, `timezone`, `language`, `login_type`, `avatar`, `data`, `status`, `last_login`, `recovery_key`, `changed`, `created`) VALUES
+(1, '649871f56179c', NULL, 1, 0, 'B Robot', 'B Robot', 'eslam.m.fayek@gmail.com', '7fffee78ce5c804fbe6431c9f88e2c46', 1, 2145916800, 'Asia/Riyadh', 'en', 'direct', 'https://ui-avatars.com/api/?name=Hi&background=0674ec&color=fff', NULL, 2, 1687721728, NULL, 1681286037, 1681286037);
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `sp_users`
+--
+ALTER TABLE `sp_users`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `sp_users`
+--
+ALTER TABLE `sp_users`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
