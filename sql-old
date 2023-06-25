@@ -1,0 +1,95 @@
+-- phpMyAdmin SQL Dump
+-- version 5.0.4
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost
+-- Generation Time: Jun 26, 2023 at 04:37 AM
+-- Server version: 5.7.42-log
+-- PHP Version: 8.0.26
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Database: `waziper`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sp_users`
+--
+
+CREATE TABLE `sp_users` (
+  `id` int(11) NOT NULL,
+  `ids` mediumtext,
+  `pid` text,
+  `role` int(11) DEFAULT NULL,
+  `fullname` mediumtext,
+  `email` mediumtext,
+  `password` mediumtext,
+  `package` int(11) DEFAULT NULL,
+  `expiration_date` date DEFAULT NULL,
+  `timezone` mediumtext,
+  `login_type` mediumtext,
+  `data` mediumtext,
+  `status` int(11) DEFAULT NULL,
+  `changed` datetime DEFAULT NULL,
+  `created` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Dumping data for table `sp_users`
+--
+
+INSERT INTO `sp_users` (`id`, `ids`, `pid`, `role`, `fullname`, `email`, `password`, `package`, `expiration_date`, `timezone`, `login_type`, `data`, `status`, `changed`, `created`) VALUES
+(1, '36e926d5d66ae54992fc9ebb9d0511c2', NULL, 1, 'B Robot', 'eslam@vertex.com.co', '9a6cc2721aeff9061c60bc8ef73200d4', 4, '2030-09-10', 'Africa/Cairo', 'direct', NULL, 2, '2022-11-20 11:43:53', '2020-04-10 15:12:43'),
+(7, '1f5a4a58e58ff4f6ed738e49efe32428', NULL, 1, 'Eslam Mohamed Fayek', 'eslam.m.fayek@gmail.com', '7fffee78ce5c804fbe6431c9f88e2c46', 4, '2024-01-01', 'Africa/Cairo', 'direct', NULL, 2, '2023-05-01 20:17:04', '2022-11-23 15:13:56'),
+(32, '1f59406c89501369c08feb7644252f3d', NULL, 0, 'mohamed yehya', 'mohamed@alhoria.co', '024edfc852b0ad6274c6768888f246c6', 3, '2024-04-05', 'Africa/Cairo', 'direct', NULL, 2, '2023-04-05 03:09:30', '2023-02-10 00:10:26'),
+(35, 'c926e17e4eea1e8ae86f4ac8bb8436a7', NULL, 0, 'B Robot', 'selim@vertex.com.co', '9a6cc2721aeff9061c60bc8ef73200d4', 4, '2024-02-11', 'Asia/Riyadh', 'direct', NULL, 2, '2023-06-07 20:38:24', '2023-02-11 18:38:50'),
+(36, '90d21d4d2b11ba092b4d4712daa82725', NULL, 0, 'Five', 'fivedigitalmarketingagency@gmail.com', '2f4c5664649e2ce7319f855df552c388', 3, '2023-05-01', 'Africa/Cairo', 'direct', NULL, 2, '2023-03-07 18:44:20', '2023-03-07 18:44:20'),
+(43, 'b10c095bffa787d940b14aa316c1f9ad', NULL, 0, 'QTC', 'marketing@qtc.sa', '40b6a01e0e554e7f86554cec8d8cf328', 3, '2024-02-01', 'Asia/Riyadh', 'direct', NULL, 2, '2023-04-16 23:21:52', '2023-03-12 15:46:01'),
+(44, '233bc6e4fa46cdc08cf0c0d2cc9a6c1d', NULL, 0, 'ahmed selim', 'ahmed@aselim.com', 'de39aa7b90ab8ddc678f13a6b74f3ee7', 1, '2023-03-19', 'Africa/Cairo', 'direct', NULL, 1, '2023-03-18 23:49:11', '2023-03-18 23:49:11'),
+(45, 'c1d2ab6d65e960279eead5ecb739d2ac', NULL, 0, 'ahmed selim', 'selim@vertex.com.eg', 'de39aa7b90ab8ddc678f13a6b74f3ee7', 4, '2023-12-31', 'Africa/Cairo', 'direct', NULL, 2, '2023-03-30 07:17:38', '2023-03-18 23:51:14'),
+(74, 'dc5a665bbf686fd070b0df637fedeaab', NULL, 0, 'ebrahim', 'elsawy@vertex.com.eg', '351acb16ff0f624959a43f651126357a', 1, '2024-04-01', 'Africa/Cairo', 'direct', NULL, 2, '2023-04-13 15:03:08', '2023-04-10 21:45:51'),
+(75, '550328f18df77c869c20edd841d3f172', NULL, 0, 'Mohamed khaled', 'mmedo7569@gmail.com', '43abe0c994ccde6f80a3acc3f64a1c20', 6, '2023-05-04', 'Africa/Cairo', 'direct', NULL, 2, '2023-04-28 22:08:31', '2023-04-27 14:01:35'),
+(76, 'ea5daf1c591135ba5aac033cfd248be7', NULL, 0, 'mohamed hassan', 'moh.hassan35@gmail.com', '25f64a2e2300131594d7be0b7abc0d2c', 1, '2023-05-10', 'Asia/Riyadh', 'direct', NULL, 1, '2023-05-03 08:11:49', '2023-05-03 08:11:49'),
+(77, '08f45b748d795358551e98e1f7d30841', NULL, 0, 'AlaaelDin Matea Ismail', 'Alaaeldin.ismail22@gmail.com', '5ada3ebe1797dbf4e48a1727cca9f37c', 1, '2023-05-17', 'Africa/Cairo', 'direct', NULL, 1, '2023-05-10 01:42:14', '2023-05-10 01:42:14'),
+(78, '8abe7e56377aace70afccb9654195b71', NULL, 0, 'Gadallah manal muhamed', 'manalmuhamed@gmail.com', '1f3f51368353ba42cdab8aa2034c376d', 1, '2023-05-17', 'Africa/Cairo', 'direct', NULL, 1, '2023-05-10 04:46:10', '2023-05-10 04:46:10'),
+(79, 'ef795ce1fa2de0b9a882ae756d7009ce', NULL, 0, 'جامعة مايو بالقاهرة (MUC)', 'students.affairs@muc.edu.eg', '3113c9efc6dc69260d7642c420cd679f', 1, '2023-05-20', 'Africa/Cairo', 'direct', NULL, 1, '2023-05-13 17:20:32', '2023-05-13 17:20:32'),
+(80, '2fd92318d313d2593e1a8692fc9a50c9', NULL, 0, 'مجدي جلال', 'ondustrial1@gmail.com', 'e13c982c64559853317481f293402019', 5, '2023-06-10', 'Asia/Jerusalem', 'direct', NULL, 2, '2023-06-07 18:10:28', '2023-05-20 14:40:20'),
+(81, '8915d6f0d532f22e1f7d0b33fd5a1ba9', NULL, 0, 'Abdalla abdelfttah', 'abdalaabdelftah@gmail.com', 'e63cc2fb9e03abd14cfaf94f88f1ec8e', 1, '2023-05-28', 'Africa/Cairo', 'direct', NULL, 1, '2023-05-21 05:29:58', '2023-05-21 05:29:58'),
+(82, '0adbad0fc64214820844a714af852df1', NULL, 0, 'Mohamed Salah', 'mohamedsallah10111@gmail.com', '426d8639d4b0720a2fd9bd732051ee21', 1, '2023-06-01', 'Africa/Cairo', 'direct', NULL, 1, '2023-05-25 23:01:30', '2023-05-25 23:01:30'),
+(83, '51e9989de1c36b65298b74fd07a37961', NULL, 0, 'صهيب ميال', 'sohaybma494@gmail.com', 'a87b0dd15a6efe2dd225e6b6fc2cf4ba', 1, '2023-06-03', 'Africa/Casablanca', 'direct', NULL, 1, '2023-05-27 17:29:17', '2023-05-27 17:29:17');
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `sp_users`
+--
+ALTER TABLE `sp_users`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `sp_users`
+--
+ALTER TABLE `sp_users`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=84;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
